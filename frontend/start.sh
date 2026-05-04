@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 # Replace hardcoded localhost:8000 with the actual backend URL

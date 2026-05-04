@@ -10,4 +10,4 @@ RUN chmod +x /app/start.sh
 EXPOSE 3000
 
 ENTRYPOINT []
-CMD ["bash", "/app/start.sh"]
+CMD ["sh", "/app/start.sh"]
