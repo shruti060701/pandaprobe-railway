@@ -2,24 +2,45 @@
 set -e
 
 if [ -n "$API_URL" ]; then
-  echo "=== DEBUG: Searching for localhost patterns ==="
-  echo "--- Files with 'localhost:8000' ---"
-  grep -rl "localhost:8000" /app/.next/ 2>/dev/null || echo "NONE FOUND"
-  echo "--- Files with 'localhost' (broader) ---"
-  grep -rl "localhost" /app/.next/ 2>/dev/null | head -20 || echo "NONE FOUND"
-  echo "--- Checking for gzipped static files ---"
-  ls /app/.next/static/chunks/*.gz 2>/dev/null | head -5 || echo "NO GZ FILES"
-  echo "--- Sample of matching content ---"
-  grep -r "localhost:8000" /app/.next/ 2>/dev/null | head -5 || echo "NO MATCHES"
-  echo "=== Replacing ==="
+  node -e "
+    const fs = require('fs');
+    const path = require('path');
+    const target = 'http://localhost:8000';
+    const replacement = process.env.API_URL;
+    console.log('Replacing', target, 'with', replacement);
 
-  for f in $(grep -rl "localhost:8000" /app/.next/ 2>/dev/null); do
-    echo "Replacing in: $f"
-    sed -i "s|http://localhost:8000|$API_URL|g" "$f"
-  done
+    function walk(dir) {
+      let files = [];
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) files = files.concat(walk(full));
+        else if (entry.name.endsWith('.js') || entry.name.endsWith('.json')) files.push(full);
+      }
+      return files;
+    }
 
-  echo "=== VERIFY: Any localhost:8000 remaining? ==="
-  grep -r "localhost:8000" /app/.next/ 2>/dev/null | head -5 || echo "NONE - replacement successful"
+    let count = 0;
+    for (const f of walk('/app/.next')) {
+      const content = fs.readFileSync(f, 'utf8');
+      if (content.includes(target)) {
+        const updated = content.split(target).join(replacement);
+        fs.writeFileSync(f, updated, 'utf8');
+        count++;
+        console.log('Replaced in:', f);
+      }
+    }
+    console.log('Total files updated:', count);
+
+    // Verify
+    let remaining = 0;
+    for (const f of walk('/app/.next')) {
+      if (fs.readFileSync(f, 'utf8').includes(target)) {
+        remaining++;
+        console.log('STILL CONTAINS localhost:8000:', f);
+      }
+    }
+    console.log(remaining ? 'WARNING: ' + remaining + ' files still contain localhost:8000' : 'VERIFIED: No localhost:8000 remaining');
+  "
 fi
 
 exec node /app/server.js
